@@ -10,11 +10,11 @@ have tab-completion and some other nice features.
 First please put your API key/secret in apikey.cfg. Then you can start the program
 and you will drop into a python shell, where you can write something like:
 
-    api.detection.detect(img = File(r'<path to the image file>'))
+    api.detect(image_file = File(r'<path to the image file>'))
 
 Note that `api` here is a global variable.
 
-## 2. hello.py
+## 2. call.py
 This is a comprehensive demo for Face++ APIs. See the comments in the source
 code for details.
 

@@ -1,32 +1,9 @@
 # -*- coding: utf-8 -*-
-# $File: facepp.py
-# $Date: Thu May 16 14:59:36 2013 +0800
-# $Author: jiakai@megvii.com
-#
-# This program is free software. It comes without any warranty, to
-# the extent permitted by applicable law. You can redistribute it
-# and/or modify it under the terms of the Do What The Fuck You Want
-# To Public License, Version 2, as published by Sam Hocevar. See
-# http://sam.zoy.org/wtfpl/COPYING (copied as below) for more details.
-#
-#                DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 
-#                        Version 2, December 2004 
-#
-#     Copyright (C) 2004 Sam Hocevar <sam@hocevar.net> 
-#
-#     Everyone is permitted to copy and distribute verbatim or modified 
-#     copies of this license document, and changing it is allowed as long 
-#     as the name is changed. 
-#
-#                DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 
-#       TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION 
-#
-#      0. You just DO WHAT THE FUCK YOU WANT TO. 
 
 """a simple facepp sdk
 example:
 api = API(key, secret)
-api.detection.detect(img = File('/tmp/test.jpg'))"""
+api.detect(img = File('/tmp/test.jpg'))"""
 
 __all__ = ['File', 'APIError', 'API']
 
@@ -35,10 +12,8 @@ DEBUG_LEVEL = 1
 
 import sys
 import socket
-import urllib
 import urllib2
 import json
-import os
 import os.path
 import itertools
 import mimetools
@@ -46,7 +21,6 @@ import mimetypes
 import time
 import tempfile
 from collections import Iterable
-from cStringIO import StringIO
 
 class File(object):
     """an object representing a local file"""
@@ -64,7 +38,7 @@ class File(object):
         img = cv2.imread(self.path)
         assert img is not None and img.size != 0, 'Invalid image'
         bigdim = max(img.shape[0], img.shape[1])
-        downscale = max(1., bigdim / 600.)
+        downscale = max(1., bigdim / 2024.)
         img = cv2.resize(img,
                 (int(img.shape[1] / downscale),
                     int(img.shape[0] / downscale)))
@@ -79,7 +53,7 @@ class File(object):
 
         img = PIL.Image.open(self.path)
         bigdim = max(img.size[0], img.size[1])
-        downscale = max(1., bigdim / 600.)
+        downscale = max(1., bigdim / 2024.)
         img = img.resize(
                 (int(img.size[0] / downscale), int(img.size[1] / downscale)))
         img.save(ftmp)
@@ -130,7 +104,7 @@ class APIError(Exception):
 class API(object):
     key = None
     secret = None
-    server = 'http://api.faceplusplus.com/'
+    server = 'https://api.megvii.com/facepp/v3/'
 
     decode_result = True
     timeout = None
@@ -159,14 +133,6 @@ class API(object):
 
         _setup_apiobj(self, self, [])
 
-    def wait_async(self, session_id, referesh_interval = 2):
-        """wait for asynchronous operations to complete"""
-        while True:
-            rst = self.info.get_session(session_id = session_id)
-            if rst['status'] != u'INQUEUE':
-                return rst
-            _print_debug(rst)
-            time.sleep(referesh_interval)
 
     def update_request(self, request):
         """overwrite this function to update the request before sending it to
@@ -198,32 +164,25 @@ class _APIProxy(object):
     def __init__(self, api, path):
         _setup_apiobj(self, api, path)
 
-    def __call__(self, post = False, *args, **kargs):
+    def __call__(self, *args, **kargs):
         if len(args):
             raise TypeError('Only keyword arguments are allowed')
-        if type(post) is not bool:
-            raise TypeError('post argument can only be True or False')
         form = _MultiPartForm()
-        add_form = False
         for (k, v) in kargs.iteritems():
             if isinstance(v, File):
-                add_form = True
                 form.add_file(k, v.get_filename(), v.content)
 
-        if post:
-            url = self._urlbase
-            for k, v in self._mkarg(kargs).iteritems():
-                form.add_field(k, v)
-            add_form = True
-        else:
-            url = self.geturl(**kargs)
+        
+        url = self._urlbase
+        for k, v in self._mkarg(kargs).iteritems():
+            form.add_field(k, v)
+       
 
         request = urllib2.Request(url)
-        if add_form:
-            body = str(form)
-            request.add_header('Content-type', form.get_content_type())
-            request.add_header('Content-length', str(len(body)))
-            request.add_data(body)
+        body = str(form)
+        request.add_header('Content-type', form.get_content_type())
+        request.add_header('Content-length', str(len(body)))
+        request.add_data(body)
 
         self._api.update_request(request)
 
@@ -268,14 +227,6 @@ class _APIProxy(object):
                 kargs[k] = enc(v)
 
         return kargs
-
-    def geturl(self, **kargs):
-        """return the request url"""
-        return self._urlbase + '?' + urllib.urlencode(self._mkarg(kargs)) 
-
-    def visit(self, browser = 'chromium', **kargs):
-        """visit the url in browser"""
-        os.system('{0} "{1}"'.format(browser, self.geturl(**kargs)))
 
 
 
@@ -348,48 +299,20 @@ def _print_debug(msg):
         sys.stderr.write(str(msg) + '\n')
 
 _APIS = [
-  '/detection/detect',
-  '/detection/landmark',
-  '/faceset/add_face',
+  '/detect',
+  '/compare',
+  '/search',
   '/faceset/create',
+  '/faceset/addface',
+  '/faceset/removeface',
+  '/faceset/update',
+  '/faceset/getdetail',
   '/faceset/delete',
-  '/faceset/get_info',
-  '/faceset/remove_face',
-  '/faceset/set_info',
-  '/group/add_person',
-  '/group/create',
-  '/group/delete',
-  '/group/get_info',
-  '/group/remove_person',
-  '/group/set_info',
-  '/grouping/grouping',
-  '/info/get_app',
-  '/info/get_face',
-  '/info/get_faceset_list',
-  '/info/get_group_list',
-  '/info/get_image',
-  '/info/get_person_list',
-  '/info/get_quota',
-  '/info/get_session',
-  '/person/add_face',
-  '/person/create',
-  '/person/delete',
-  '/person/get_info',
-  '/person/remove_face',
-  '/person/set_info',
-  '/recognition/compare',
-  '/recognition/group_search',
-  '/recognition/identify',
-  '/recognition/recognize',
-  '/recognition/search',
-  '/recognition/test_train',
-  '/recognition/train',
-  '/recognition/verify',
-  '/train/group_search',
-  '/train/identify',
-  '/train/recognize',
-  '/train/search',
-  '/train/verify'
+  '/faceset/getfacesets',
+  '/face/analyze',
+  '/face/getdetail',
+  '/face/setuserid'
 ]
 
 _APIS = [i.split('/')[1:] for i in _APIS]
+
