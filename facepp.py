@@ -33,48 +33,11 @@ class File(object):
         self.path = path
         self._get_content()
 
-    def _resize_cv2(self, ftmp):
-        try:
-            import cv2
-        except ImportError:
-            return False
-        img = cv2.imread(self.path)
-        assert img is not None and img.size != 0, 'Invalid image'
-        bigdim = max(img.shape[0], img.shape[1])
-        downscale = max(1., bigdim / 2024.)
-        img = cv2.resize(img,
-                         (int(img.shape[1] / downscale),
-                          int(img.shape[0] / downscale)))
-        cv2.imwrite(ftmp, img)
-        return True
-
-    def _resize_PIL(self, ftmp):
-        try:
-            import PIL.Image
-        except ImportError:
-            return False
-
-        img = PIL.Image.open(self.path)
-        bigdim = max(img.size[0], img.size[1])
-        downscale = max(1., bigdim / 2024.)
-        img = img.resize(
-            (int(img.size[0] / downscale), int(img.size[1] / downscale)))
-        img.save(ftmp)
-        return True
-
     def _get_content(self):
-        """read image content; resize the image if necessary"""
+        """read image content"""
 
         if os.path.getsize(self.path) > 2 * 1024 * 1024:
-            ftmp = tempfile.NamedTemporaryFile(
-                suffix='.jpg', delete=False).name
-            try:
-                if not (self._resize_cv2(ftmp) or self._resize_PIL(ftmp)):
-                    raise APIError(-1, None, 'image file size too large')
-                with open(ftmp, 'rb') as f:
-                    self.content = f.read()
-            finally:
-                os.unlink(ftmp)
+            raise APIError(-1, None, 'image file size too large')
         else:
             with open(self.path, 'rb') as f:
                 self.content = f.read()
