@@ -22,56 +22,22 @@ import time
 import tempfile
 from collections import Iterable
 
+
 class File(object):
+
     """an object representing a local file"""
     path = None
     content = None
+
     def __init__(self, path):
         self.path = path
         self._get_content()
 
-    def _resize_cv2(self, ftmp):
-        try:
-            import cv2
-        except ImportError:
-            return False
-        img = cv2.imread(self.path)
-        assert img is not None and img.size != 0, 'Invalid image'
-        bigdim = max(img.shape[0], img.shape[1])
-        downscale = max(1., bigdim / 2024.)
-        img = cv2.resize(img,
-                (int(img.shape[1] / downscale),
-                    int(img.shape[0] / downscale)))
-        cv2.imwrite(ftmp, img)
-        return True
-
-    def _resize_PIL(self, ftmp):
-        try:
-            import PIL.Image
-        except ImportError:
-            return False
-
-        img = PIL.Image.open(self.path)
-        bigdim = max(img.size[0], img.size[1])
-        downscale = max(1., bigdim / 2024.)
-        img = img.resize(
-                (int(img.size[0] / downscale), int(img.size[1] / downscale)))
-        img.save(ftmp)
-        return True
-
     def _get_content(self):
-        """read image content; resize the image if necessary"""
+        """read image content"""
 
         if os.path.getsize(self.path) > 2 * 1024 * 1024:
-            ftmp = tempfile.NamedTemporaryFile(
-                    suffix = '.jpg', delete = False).name
-            try:
-                if not (self._resize_cv2(ftmp) or self._resize_PIL(ftmp)):
-                    raise APIError(-1, None, 'image file size too large')
-                with open(ftmp, 'rb') as f:
-                    self.content = f.read()
-            finally:
-                os.unlink(ftmp)
+            raise APIError(-1, None, 'image file size too large')
         else:
             with open(self.path, 'rb') as f:
                 self.content = f.read()
@@ -96,7 +62,7 @@ class APIError(Exception):
         self.body = body
 
     def __str__(self):
-        return 'code={s.code}\nurl={s.url}\n{s.body}'.format(s = self)
+        return 'code={s.code}\nurl={s.url}\n{s.body}'.format(s=self)
 
     __repr__ = __str__
 
@@ -111,9 +77,9 @@ class API(object):
     max_retries = None
     retry_delay = None
 
-    def __init__(self, key, secret, srv = None,
-            decode_result = True, timeout = 30, max_retries = 10,
-            retry_delay = 5):
+    def __init__(self, key, secret, srv=None,
+                 decode_result=True, timeout=30, max_retries=10,
+                 retry_delay=5):
         """:param srv: The API server address
         :param decode_result: whether to json_decode the result
         :param timeout: HTTP request timeout in seconds
@@ -132,7 +98,6 @@ class API(object):
         self.retry_delay = retry_delay
 
         _setup_apiobj(self, self, [])
-
 
     def update_request(self, request):
         """overwrite this function to update the request before sending it to
@@ -155,6 +120,7 @@ def _setup_apiobj(self, api, path):
             done.add(cur)
             setattr(self, cur, _APIProxy(api, i[:lvl + 1]))
 
+
 class _APIProxy(object):
     _api = None
     """underlying :class:`API` object"""
@@ -172,11 +138,9 @@ class _APIProxy(object):
             if isinstance(v, File):
                 form.add_file(k, v.get_filename(), v.content)
 
-        
         url = self._urlbase
         for k, v in self._mkarg(kargs).iteritems():
             form.add_field(k, v)
-       
 
         request = urllib2.Request(url)
         body = str(form)
@@ -190,7 +154,7 @@ class _APIProxy(object):
         while True:
             retry -= 1
             try:
-                ret = urllib2.urlopen(request, timeout = self._api.timeout).read()
+                ret = urllib2.urlopen(request, timeout=self._api.timeout).read()
                 break
             except urllib2.HTTPError as e:
                 raise APIError(e.code, url, e.read())
@@ -229,9 +193,9 @@ class _APIProxy(object):
         return kargs
 
 
-
 # ref: http://www.doughellmann.com/PyMOTW/urllib2/
 class _MultiPartForm(object):
+
     """Accumulate the data to be used when posting a form."""
 
     def __init__(self):
@@ -239,7 +203,7 @@ class _MultiPartForm(object):
         self.files = []
         self.boundary = mimetools.choose_boundary()
         return
-    
+
     def get_content_type(self):
         return 'multipart/form-data; boundary=%s' % self.boundary
 
@@ -248,44 +212,44 @@ class _MultiPartForm(object):
         self.form_fields.append((name, value))
         return
 
-    def add_file(self, fieldname, filename, content, mimetype = None):
+    def add_file(self, fieldname, filename, content, mimetype=None):
         """Add a file to be uploaded."""
         if mimetype is None:
             mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
         self.files.append((fieldname, filename, mimetype, content))
         return
-    
+
     def __str__(self):
         """Return a string representing the form data, including attached files."""
         # Build a list of lists, each containing "lines" of the
         # request.  Each part is separated by a boundary string.
         # Once the list is built, return a string where each
-        # line is separated by '\r\n'.  
+        # line is separated by '\r\n'.
         parts = []
         part_boundary = '--' + self.boundary
-        
+
         # Add the form fields
         parts.extend(
-            [ part_boundary,
-              'Content-Disposition: form-data; name="%s"' % name,
-              '',
-              value,
-            ]
+            [part_boundary,
+             'Content-Disposition: form-data; name="%s"' % name,
+             '',
+             value,
+             ]
             for name, value in self.form_fields
-            )
-        
+        )
+
         # Add the files to upload
         parts.extend(
-            [ part_boundary,
-              'Content-Disposition: file; name="%s"; filename="%s"' % \
-                 (field_name, filename),
-              'Content-Type: %s' % content_type,
-              '',
-              body,
-            ]
+            [part_boundary,
+             'Content-Disposition: file; name="%s"; filename="%s"' %
+             (field_name, filename),
+             'Content-Type: %s' % content_type,
+             '',
+             body,
+             ]
             for field_name, filename, content_type, body in self.files
-            )
-        
+        )
+
         # Flatten the list and add closing boundary marker,
         # then return CR+LF separated data
         flattened = list(itertools.chain(*parts))
@@ -299,20 +263,19 @@ def _print_debug(msg):
         sys.stderr.write(str(msg) + '\n')
 
 _APIS = [
-  '/detect',
-  '/compare',
-  '/search',
-  '/faceset/create',
-  '/faceset/addface',
-  '/faceset/removeface',
-  '/faceset/update',
-  '/faceset/getdetail',
-  '/faceset/delete',
-  '/faceset/getfacesets',
-  '/face/analyze',
-  '/face/getdetail',
-  '/face/setuserid'
+    '/detect',
+    '/compare',
+    '/search',
+    '/faceset/create',
+    '/faceset/addface',
+    '/faceset/removeface',
+    '/faceset/update',
+    '/faceset/getdetail',
+    '/faceset/delete',
+    '/faceset/getfacesets',
+    '/face/analyze',
+    '/face/getdetail',
+    '/face/setuserid'
 ]
 
 _APIS = [i.split('/')[1:] for i in _APIS]
-
